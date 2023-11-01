@@ -16,13 +16,17 @@ type (
 	ZapLoggerConfig struct {
 		// Skipper defines a function to skip middleware
 		Skipper Skipper
+		// Whether to include the request method and URI in the log message field
+		// Makes it easier to visualize the logs in systems that expand only the log message by default(e.g. Stackdriver)
+		IncludeRequestLogMessage bool
 	}
 )
 
 var (
 	// DefaultZapLoggerConfig is the default ZapLogger middleware config.
 	DefaultZapLoggerConfig = ZapLoggerConfig{
-		Skipper: DefaultSkipper,
+		Skipper:                  DefaultSkipper,
+		IncludeRequestLogMessage: false,
 	}
 )
 
@@ -59,11 +63,13 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 			req := c.Request()
 			res := c.Response()
 
+			requestLogField := fmt.Sprintf("%s %s", req.Method, req.RequestURI)
+
 			fields := []zapcore.Field{
 				zap.String("remote_ip", c.RealIP()),
 				zap.String("latency", time.Since(start).String()),
 				zap.String("host", req.Host),
-				zap.String("request", fmt.Sprintf("%s %s", req.Method, req.RequestURI)),
+				zap.String("request", requestLogField),
 				zap.Int("status", res.Status),
 				zap.Int64("size", res.Size),
 				zap.String("user_agent", req.UserAgent()),
@@ -75,16 +81,22 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 			}
 			fields = append(fields, zap.String("request_id", id))
 
+			var requestLogMessage string
+
+			if config.IncludeRequestLogMessage {
+				requestLogMessage = ": " + requestLogField
+			}
+
 			n := res.Status
 			switch {
 			case n >= 500:
-				log.With(zap.Error(err)).Error("Server error", fields...)
+				log.With(zap.Error(err)).Error("Server error"+requestLogMessage, fields...)
 			case n >= 400:
-				log.With(zap.Error(err)).Warn("Client error", fields...)
+				log.With(zap.Error(err)).Warn("Client error"+requestLogMessage, fields...)
 			case n >= 300:
-				log.Info("Redirection", fields...)
+				log.Info("Redirection"+requestLogMessage, fields...)
 			default:
-				log.Info("Success", fields...)
+				log.Info("Success"+requestLogMessage, fields...)
 			}
 
 			return nil
