@@ -14,8 +14,12 @@
 ## Pre-requisites
 
 *  Go with Go modules enabled.
-*  [Echo v4](https://echo.labstack.com/)
+*  [Echo v5](https://echo.labstack.com/)
 *  [Zap](https://github.com/uber-go/zap)
+
+> **Echo version:** This is the `v2` line of the fork, which targets **Echo v5**. The module path is
+> `github.com/Unity-Technologies/echozap/v2`, so import it with the `/v2` suffix. For Echo v4, use a
+> `v1.x` release of the fork.
 
 ## Usage
 
@@ -23,10 +27,11 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
-	"github.com/brpaz/echozap"
-	"github.com/labstack/echo/v4"
+	"github.com/Unity-Technologies/echozap/v2"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 )
 
@@ -37,10 +42,13 @@ func main() {
 
 	e.Use(echozap.ZapLogger(zapLogger))
 
-	e.GET("/", func(c echo.Context) error {
+	e.GET("/", func(c *echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
-	e.Logger.Fatal(e.Start(":1323"))
+
+	if err := e.Start(":1323"); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 

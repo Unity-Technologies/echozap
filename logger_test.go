@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -18,7 +18,7 @@ func TestZapLogger(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := func(c echo.Context) error {
+	h := func(c *echo.Context) error {
 		return c.String(http.StatusOK, "")
 	}
 
@@ -46,7 +46,7 @@ func TestZapLoggerWithConfig(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := func(c echo.Context) error {
+	h := func(c *echo.Context) error {
 		return c.String(http.StatusOK, "")
 	}
 
@@ -55,7 +55,7 @@ func TestZapLoggerWithConfig(t *testing.T) {
 	logger := zap.New(obs)
 
 	err := ZapLoggerWithConfig(logger, ZapLoggerConfig{
-		Skipper: func(ctx echo.Context) bool {
+		Skipper: func(ctx *echo.Context) bool {
 			return strings.Contains(ctx.Request().URL.Path, "/something")
 		},
 	})(h)(c)

@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 type (
-	Skipper func(c echo.Context) bool
+	Skipper func(c *echo.Context) bool
 
 	// ZapLoggerConfig defines the config for ZapLogger middleware
 	ZapLoggerConfig struct {
@@ -31,7 +31,7 @@ var (
 )
 
 // DefaultSkipper returns false which processes the middleware
-func DefaultSkipper(echo.Context) bool {
+func DefaultSkipper(*echo.Context) bool {
 	return false
 }
 
@@ -48,7 +48,7 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 			config.Skipper = DefaultZapLoggerConfig.Skipper
 		}
 
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			if config.Skipper(c) {
 				return next(c)
 			}
@@ -57,11 +57,19 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 
 			err := next(c)
 			if err != nil {
-				c.Error(err)
+				c.Echo().HTTPErrorHandler(c, err)
 			}
 
 			req := c.Request()
-			res := c.Response()
+
+			// echo v5 returns the bare http.ResponseWriter from Response(); the recorded status and
+			// size live on the underlying *echo.Response, recovered via UnwrapResponse.
+			var status int
+			var size int64
+			if res, uErr := echo.UnwrapResponse(c.Response()); uErr == nil {
+				status = res.Status
+				size = res.Size
+			}
 
 			requestLogField := fmt.Sprintf("%s %s", req.Method, req.RequestURI)
 
@@ -70,14 +78,14 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 				zap.String("latency", time.Since(start).String()),
 				zap.String("host", req.Host),
 				zap.String("request", requestLogField),
-				zap.Int("status", res.Status),
-				zap.Int64("size", res.Size),
+				zap.Int("status", status),
+				zap.Int64("size", size),
 				zap.String("user_agent", req.UserAgent()),
 			}
 
 			id := req.Header.Get(echo.HeaderXRequestID)
 			if id == "" {
-				id = res.Header().Get(echo.HeaderXRequestID)
+				id = c.Response().Header().Get(echo.HeaderXRequestID)
 			}
 			fields = append(fields, zap.String("request_id", id))
 
@@ -87,7 +95,7 @@ func ZapLoggerWithConfig(log *zap.Logger, config ZapLoggerConfig) echo.Middlewar
 				requestLogMessage = ": " + requestLogField
 			}
 
-			n := res.Status
+			n := status
 			switch {
 			case n >= 500:
 				log.With(zap.Error(err)).Error("Server error"+requestLogMessage, fields...)
